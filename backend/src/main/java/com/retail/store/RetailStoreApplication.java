@@ -15,12 +15,20 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class RetailStoreApplication {
     public static void main(String[] args) {
-        String mongoUri = System.getenv("MONGODB_URI");
-        if (mongoUri == null || mongoUri.isBlank()) {
-            mongoUri = "mongodb://localhost:27017/retail_store";
+        String storageMode = System.getenv().getOrDefault("APP_STORAGE_MODE", "auto").trim().toLowerCase();
+        if (!storageMode.equals("auto") && !storageMode.equals("in-memory") && !storageMode.equals("mongodb")) {
+            throw new IllegalArgumentException("APP_STORAGE_MODE must be auto, in-memory, or mongodb.");
         }
 
-        boolean mongoReachable = isMongoReachable(mongoUri);
+        boolean mongoReachable = false;
+        if (!storageMode.equals("in-memory")) {
+            String mongoUri = System.getenv("MONGODB_URI");
+            if (mongoUri == null || mongoUri.isBlank()) {
+                mongoUri = "mongodb://localhost:27017/retail_store";
+            }
+            mongoReachable = isMongoReachable(mongoUri);
+        }
+
         SpringApplication app = new SpringApplication(RetailStoreApplication.class);
         Map<String, Object> defaultProperties = new HashMap<>();
 
@@ -29,9 +37,13 @@ public class RetailStoreApplication {
             defaultProperties.put("app.storage.mode", "mongodb");
         } else {
             System.out.println("==========================================================================");
-            System.out.println(">> [Retail Store API] MongoDB connection check failed.");
-            System.out.println(">> Automatically operating in IN-MEMORY STORAGE mode (fully functional).");
-            System.out.println(">> To persist to MongoDB, configure a reachable connection URI and restart the app.");
+            if (storageMode.equals("in-memory")) {
+                System.out.println(">> [Retail Store API] IN-MEMORY STORAGE mode configured.");
+            } else {
+                System.out.println(">> [Retail Store API] MongoDB connection check failed.");
+                System.out.println(">> Automatically operating in IN-MEMORY STORAGE mode (fully functional).");
+            }
+            System.out.println(">> Data is temporary and will be lost when the app restarts.");
             System.out.println("==========================================================================");
             defaultProperties.put("app.storage.mode", "in-memory");
             defaultProperties.put("spring.autoconfigure.exclude",
@@ -45,13 +57,15 @@ public class RetailStoreApplication {
     }
 
     private static boolean isMongoReachable(String uri) {
-        MongoClientSettings settings = MongoClientSettings.builder()
-                .applyConnectionString(new ConnectionString(uri))
-                .applyToClusterSettings(cluster -> cluster.serverSelectionTimeout(600, TimeUnit.MILLISECONDS))
-                .build();
-        try (MongoClient client = MongoClients.create(settings)) {
-            client.getDatabase("admin").runCommand(new Document("ping", 1));
-            return true;
+        try {
+            MongoClientSettings settings = MongoClientSettings.builder()
+                    .applyConnectionString(new ConnectionString(uri))
+                    .applyToClusterSettings(cluster -> cluster.serverSelectionTimeout(600, TimeUnit.MILLISECONDS))
+                    .build();
+            try (MongoClient client = MongoClients.create(settings)) {
+                client.getDatabase("admin").runCommand(new Document("ping", 1));
+                return true;
+            }
         } catch (MongoException | IllegalArgumentException e) {
             System.err.println(">> [Retail Store API] MongoDB connection check failed (" +
                     e.getClass().getSimpleName() + "); using in-memory storage.");

@@ -1,6 +1,6 @@
 # Fieldwork Retail
 
-A full-stack retail-management platform with a React storefront and operations console, a Spring Boot REST API, and MongoDB persistence (with automatic in-memory fallback).
+A full-stack retail-management platform with a React storefront and operations console and a Spring Boot REST API. It supports MongoDB or in-memory storage; in-memory mode is suitable for demos but does not persist data across restarts.
 
 ## Features
 
@@ -11,26 +11,26 @@ A full-stack retail-management platform with a React storefront and operations c
 - **Interactive Checkout**: Dedicated checkout modal that places orders, validates inventory availability, and immediately decrements stock.
 - **Order Management**: View all orders, view order line items breakdown, update order status (`New`, `Processing`, `Shipped`, `Completed`, `Cancelled`), and delete orders.
 - **Stock Replenishment on Cancellation**: Cancelling an order automatically restores the items back to available inventory.
-- **Dual Storage Support**: Connects to MongoDB when available; automatically falls back to an in-memory storage mode if MongoDB is not running, ensuring zero-configuration local development.
+- **Storage Options**: Supports MongoDB persistence or in-memory storage for zero-configuration development and demos.
 
 ## Prerequisites
 
 - **Java**: Java 21 (LTS) or newer (tested on Java 21 and Java 23)
 - **Maven**: Maven 3.9+ or the included Maven Wrapper (`mvnw` / `mvnw.cmd`)
 - **Node.js**: Node.js 18+ or 20+ with npm
-- **Database (Optional)**: Docker Desktop or local MongoDB server on port 27017 (optional; runs in in-memory mode if offline)
+- **Database (Optional)**: MongoDB is only needed when persistent storage is required.
 
 ## Run Locally
 
-### 1. (Optional) Start MongoDB
+### 1. (Optional) Configure MongoDB
 
-If you have Docker Desktop installed and want database persistence:
+To use MongoDB for persistent storage, start a local MongoDB server or provide `MONGODB_URI`. If you skip MongoDB, the backend automatically uses in-memory storage.
 
 ```powershell
 docker compose up -d mongodb
 ```
 
-> **Note**: If you don't have Docker or MongoDB installed, you can skip this step! The backend will automatically detect that MongoDB is offline and run seamlessly in in-memory mode.
+> **Note**: In-memory data is temporary and is lost when the backend restarts.
 
 ### 2. Start the Backend API
 
@@ -63,20 +63,20 @@ Open your browser to the URL printed by Vite, typically [http://localhost:5173](
 
 ## Deploy to Render
 
-The root `Dockerfile` builds the React frontend and Spring Boot backend into one service. The frontend is served by Spring Boot, so the app and `/api` endpoints share the same public URL. Render hosts the app; MongoDB Atlas stores persistent data.
+The root `Dockerfile` builds the React frontend and Spring Boot backend into one service. The frontend is served by Spring Boot, so the app and `/api` endpoints share the same public URL. The Render Blueprint runs in-memory mode and requires no MongoDB or MySQL service.
 
-1. Create a MongoDB Atlas cluster and database user. In Atlas Network Access, allow the outbound IP addresses shown for your Render service.
-2. In Render, create a new Blueprint from this GitHub repository. Render reads the root `render.yaml` and builds the app from the root `Dockerfile`.
-3. During Blueprint setup, provide the Atlas `mongodb+srv://` URI as `MONGODB_URI`, a store-owner `ADMIN_USERNAME`, and a unique `ADMIN_PASSWORD` with at least 16 characters. These are secret values; never commit them or share them in chat.
-4. Deploy the Blueprint. It configures `SESSION_COOKIE_SECURE=true` and checks `/api/dashboard/summary` for health.
+1. In Render, create a Blueprint from this GitHub repository. Render reads the root `render.yaml` and builds the app from the root `Dockerfile`.
+2. During Blueprint setup, provide a store-owner `ADMIN_USERNAME` and a unique `ADMIN_PASSWORD` with at least 16 characters. These are secret values; never commit them or share them in chat.
+3. Deploy the Blueprint. It configures in-memory storage and `SESSION_COOKIE_SECURE=true`, and checks `/api/dashboard/summary` for health.
 
-The store-owner console requires the configured username and password. Product browsing and customer checkout remain public; product changes, order administration, and dashboard data require an authenticated session. The app can run without a MongoDB service by falling back to in-memory storage, but that data is not persistent across restarts. Do not store production data in in-memory mode.
+The store-owner console requires the configured username and password. Product browsing and customer checkout remain public; product changes, order administration, and dashboard data require an authenticated session. In-memory products and orders reset whenever the service restarts or redeploys. This is appropriate only for a demo; do not use it for production or important customer orders.
 
 The Render Blueprint targets the Free web-service plan for a no-cost demo. Free services can spin down after inactivity and take about a minute to wake; Render does not recommend them for production.
 
 ## Environment Variables
 
-- `MONGODB_URI`: Custom MongoDB connection string (defaults to `mongodb://localhost:27017/retail_store`).
+- `APP_STORAGE_MODE`: `in-memory` to disable database connections, `mongodb` to require a reachable MongoDB instance, or `auto` (default) to probe MongoDB and fall back to in-memory mode.
+- `MONGODB_URI`: MongoDB connection string used when `APP_STORAGE_MODE` is `auto` or `mongodb` (defaults to `mongodb://localhost:27017/retail_store`).
 - `PORT`: Custom API port (defaults to `8080`).
 - `ADMIN_USERNAME`: Required store-owner account name.
 - `ADMIN_PASSWORD`: Required store-owner password (minimum 16 characters).

@@ -7,8 +7,8 @@ services:
     dockerContext: .
     healthCheckPath: /api/dashboard/summary
     envVars:
-      - key: MONGODB_URI
-        sync: false
+      - key: APP_STORAGE_MODE
+        value: in-memory
       - key: ADMIN_USERNAME
         sync: false
       - key: ADMIN_PASSWORD
