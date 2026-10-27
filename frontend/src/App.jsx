@@ -11,6 +11,8 @@ import {
   ClipboardList,
   Eye,
   LayoutDashboard,
+  LogIn,
+  LogOut,
   Minus,
   Pencil,
   Plus,
@@ -44,7 +46,11 @@ const shortDate = (value) => {
 };
 
 export default function App() {
-  const [page, setPage] = useState('Overview');
+  const [page, setPage] = useState('Storefront');
+  const [authStatus, setAuthStatus] = useState('checking');
+  const [adminUsername, setAdminUsername] = useState('');
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginError, setLoginError] = useState('');
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -62,19 +68,26 @@ export default function App() {
   async function refresh() {
     setLoading(true);
     try {
-      const [nextProducts, nextOrders, nextSummary] = await Promise.all([
-        api.products(),
-        api.orders(),
-        api.summary(),
-      ]);
+      const nextProducts = await api.products();
       setProducts(nextProducts || []);
-      setOrders(nextOrders || []);
-      setSummary(nextSummary || null);
+      if (authStatus === 'authenticated') {
+        const [nextOrders, nextSummary] = await Promise.all([api.orders(), api.summary()]);
+        setOrders(nextOrders || []);
+        setSummary(nextSummary || null);
+      } else {
+        setOrders([]);
+        setSummary(null);
+      }
       if (notice?.type === 'error') setNotice(null);
     } catch (error) {
+      if (error.status === 401 && authStatus === 'authenticated') {
+        setAuthStatus('guest');
+        setAdminUsername('');
+        setPage('Storefront');
+      }
       setNotice({
         type: 'error',
-        message: `${error.message}. Start the Spring Boot API (mvnw spring-boot:run) to connect live store data.`,
+        message: `Could not load store data: ${error.message}`,
       });
     } finally {
       setLoading(false);
@@ -82,8 +95,63 @@ export default function App() {
   }
 
   useEffect(() => {
-    refresh();
+    let active = true;
+    api.session()
+      .then((session) => {
+        if (!active) return;
+        setAdminUsername(session.username);
+        setAuthStatus('authenticated');
+        setPage('Overview');
+      })
+      .catch((error) => {
+        if (!active) return;
+        setAuthStatus('guest');
+        setPage('Storefront');
+        if (error.status !== 401) {
+          setNotice({ type: 'error', message: `Could not check the store-owner session: ${error.message}` });
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, []);
+
+  useEffect(() => {
+    if (authStatus !== 'checking') refresh();
+  }, [authStatus]);
+
+  async function signIn(username, password) {
+    setLoginError('');
+    try {
+      await api.login(username, password);
+      const session = await api.session();
+      setAdminUsername(session.username);
+      setAuthStatus('authenticated');
+      setPage('Overview');
+      setShowLogin(false);
+    } catch (error) {
+      setLoginError(error.status === 401 ? 'Incorrect username or password.' : error.message);
+    }
+  }
+
+  async function signOut() {
+    try {
+      await api.logout();
+      setAdminUsername('');
+      setAuthStatus('guest');
+      setPage('Storefront');
+    } catch (error) {
+      setNotice({ type: 'error', message: `Could not sign out: ${error.message}` });
+    }
+  }
+
+  function navigateTo(nextPage) {
+    if (nextPage !== 'Storefront' && authStatus !== 'authenticated') {
+      setShowLogin(true);
+      return;
+    }
+    setPage(nextPage);
+  }
 
   async function saveProduct(event) {
     event.preventDefault();
@@ -234,7 +302,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="#overview" onClick={() => setPage('Overview')}>
+        <a className="brand" href="#overview" onClick={() => navigateTo('Overview')}>
           <span className="brand-mark">f.</span>
           <span>fieldwork<small>RETAIL OPERATIONS</small></span>
         </a>
@@ -248,17 +316,19 @@ export default function App() {
         </div>
         <div className="nav-caption">WORKSPACE</div>
         <nav>
-          {navItems.map(({ label, icon: Icon }) => (
-            <button
-              key={label}
-              className={`nav-link ${page === label ? 'active' : ''}`}
-              onClick={() => setPage(label)}
-            >
-              <Icon size={18} strokeWidth={1.8} />
-              <span>{label}</span>
-              {label === 'Orders' && orders.length > 0 && <em>{orders.length}</em>}
-            </button>
-          ))}
+          {navItems
+            .filter(({ label }) => authStatus === 'authenticated' || label === 'Storefront')
+            .map(({ label, icon: Icon }) => (
+              <button
+                key={label}
+                className={`nav-link ${page === label ? 'active' : ''}`}
+                onClick={() => navigateTo(label)}
+              >
+                <Icon size={18} strokeWidth={1.8} />
+                <span>{label}</span>
+                {label === 'Orders' && orders.length > 0 && <em>{orders.length}</em>}
+              </button>
+            ))}
         </nav>
         <div className="sidebar-bottom">
           <div className="help-line">
@@ -266,12 +336,22 @@ export default function App() {
             <span>Help center</span>
           </div>
           <div className="profile">
-            <div className="avatar">AM</div>
-            <div>
-              <strong>Alex Morgan</strong>
-              <span>Store owner</span>
-            </div>
-            <ChevronDown size={15} />
+            {authStatus === 'authenticated' ? (
+              <>
+                <div className="avatar">{(adminUsername.slice(0, 2) || 'AM').toUpperCase()}</div>
+                <div>
+                  <strong>{adminUsername}</strong>
+                  <span>Store owner</span>
+                </div>
+                <button className="sidebar-auth" onClick={signOut} aria-label="Sign out" title="Sign out">
+                  <LogOut size={15} />
+                </button>
+              </>
+            ) : (
+              <button className="sidebar-auth" onClick={() => setShowLogin(true)}>
+                <LogIn size={16} /> Store owner sign in
+              </button>
+            )}
           </div>
         </div>
       </aside>
@@ -301,7 +381,9 @@ export default function App() {
             >
               <RefreshCw size={16} />
             </button>
-            <div className="avatar small">AM</div>
+            {authStatus === 'authenticated' && (
+              <div className="avatar small">{(adminUsername.slice(0, 2) || 'AM').toUpperCase()}</div>
+            )}
           </div>
         </header>
 
@@ -331,7 +413,7 @@ export default function App() {
               lowStock={lowStock}
               loading={loading}
               money={money}
-              setPage={setPage}
+              setPage={navigateTo}
               onViewOrder={setViewingOrder}
             />
           )}
@@ -463,6 +545,17 @@ export default function App() {
           onDeleteOrder={deleteOrder}
         />
       )}
+
+      {showLogin && (
+        <LoginModal
+          error={loginError}
+          onClose={() => {
+            setShowLogin(false);
+            setLoginError('');
+          }}
+          onSubmit={signIn}
+        />
+      )}
     </div>
   );
 }
@@ -481,7 +574,7 @@ function Overview({ summary, products, orders, lowStock, loading, money, setPage
           </h1>
           <p>Here’s the pulse of your store today.</p>
         </div>
-        <button className="outline-button" onClick={() => setPage('Storefront')}>
+        <button className="outline-button" onClick={() => navigateTo('Storefront')}>
           <Store size={16} /> View storefront
         </button>
       </div>
@@ -1304,6 +1397,54 @@ function OrderDetailsModal({ order, money, onClose, onStatusChange, onDeleteOrde
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function LoginModal({ error, onClose, onSubmit }) {
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setSubmitting(true);
+    try {
+      await onSubmit(form.get('username'), form.get('password'));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <form className="product-modal login-modal" onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="login-title">
+        <div className="modal-head">
+          <div>
+            <div className="eyebrow">STORE MANAGEMENT</div>
+            <h2 id="login-title">Store owner sign in</h2>
+          </div>
+          <button type="button" className="icon-button" aria-label="Close" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
+        <label>
+          Username
+          <input name="username" autoComplete="username" required autoFocus />
+        </label>
+        <label>
+          Password
+          <input name="password" type="password" autoComplete="current-password" required />
+        </label>
+        {error && <p className="login-error" role="alert">{error}</p>}
+        <div className="modal-actions">
+          <button className="quiet-button" type="button" onClick={onClose} disabled={submitting}>
+            Cancel
+          </button>
+          <button className="primary-button" type="submit" disabled={submitting}>
+            <LogIn size={15} /> {submitting ? 'Signing in…' : 'Sign in'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

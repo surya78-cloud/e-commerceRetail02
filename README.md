@@ -38,6 +38,8 @@ From the project root:
 
 ```powershell
 cd backend
+$env:ADMIN_USERNAME="owner"
+$env:ADMIN_PASSWORD="replace-with-a-random-secret-of-at-least-16-characters"
 .\mvnw.cmd spring-boot:run
 ```
 
@@ -66,14 +68,19 @@ The root `Dockerfile` builds the React frontend and Spring Boot backend into one
 1. Push this repository to GitHub and create a Railway project from that GitHub repository.
 2. Add a MongoDB service to the Railway project.
 3. In the application service's Variables settings, set `MONGODB_URI` to the MongoDB service's `MONGO_URL` reference (for example, `${{MongoDB.MONGO_URL}}`; use the actual MongoDB service name shown in Railway).
-4. Deploy the application service. Railway uses the root `railway.toml` health check to wait for the API before marking the deployment healthy.
+4. Set `ADMIN_USERNAME` and `ADMIN_PASSWORD` in the application service's Variables settings. Use a unique password with at least 16 characters, and never commit these values.
+5. Set `SESSION_COOKIE_SECURE=true` for HTTPS-only session and CSRF cookies.
+6. Deploy the application service. Railway uses the root `railway.toml` health check to wait for the API before marking the deployment healthy.
 
-The app also runs without a MongoDB service by falling back to in-memory storage, but that data is not persistent across restarts. Do not store production data in in-memory mode.
+The store-owner console requires the configured username and password. Product browsing and customer checkout remain public; product changes, order administration, and dashboard data require an authenticated session. The app can run without a MongoDB service by falling back to in-memory storage, but that data is not persistent across restarts. Do not store production data in in-memory mode.
 
 ## Environment Variables
 
 - `MONGODB_URI`: Custom MongoDB connection string (defaults to `mongodb://localhost:27017/retail_store`).
 - `PORT`: Custom API port (defaults to `8080`).
+- `ADMIN_USERNAME`: Required store-owner account name.
+- `ADMIN_PASSWORD`: Required store-owner password (minimum 16 characters).
+- `SESSION_COOKIE_SECURE`: Set to `true` when deployed behind HTTPS (Railway).
 - `VITE_API_URL`: Optional frontend API base URL override (defaults to `/api`, which works for local Vite proxying and same-origin production hosting).
 
 ## API Endpoints
@@ -89,3 +96,5 @@ The app also runs without a MongoDB service by falling back to in-memory storage
 - `PATCH /api/orders/{id}/status?value={status}` — Update order status (restores stock if cancelled)
 - `DELETE /api/orders/{id}` — Delete an order
 - `GET /api/dashboard/summary` — Overview metrics and storage engine status
+- `GET /api/auth/csrf` and `POST /api/auth/login` — Initialize CSRF protection and sign in
+- `GET /api/auth/session` and `POST /api/auth/logout` — Check or end the store-owner session
