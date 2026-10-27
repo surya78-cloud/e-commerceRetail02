@@ -61,18 +61,18 @@ npm run dev
 
 Open your browser to the URL printed by Vite, typically [http://localhost:5173](http://localhost:5173).
 
-## Deploy to Railway
+## Deploy to Render
 
-The root `Dockerfile` builds the React frontend and Spring Boot backend into one service. The frontend is served by Spring Boot, so the app and `/api` endpoints share the same public URL. MongoDB runs as a separate Railway service.
+The root `Dockerfile` builds the React frontend and Spring Boot backend into one service. The frontend is served by Spring Boot, so the app and `/api` endpoints share the same public URL. Render hosts the app; MongoDB Atlas stores persistent data.
 
-1. Push this repository to GitHub and create a Railway project from that GitHub repository.
-2. Add a MongoDB service to the Railway project.
-3. In the application service's Variables settings, set `MONGODB_URI` to the MongoDB service's `MONGO_URL` reference (for example, `${{MongoDB.MONGO_URL}}`; use the actual MongoDB service name shown in Railway).
-4. Set `ADMIN_USERNAME` and `ADMIN_PASSWORD` in the application service's Variables settings. Use a unique password with at least 16 characters, and never commit these values.
-5. Set `SESSION_COOKIE_SECURE=true` for HTTPS-only session and CSRF cookies.
-6. Deploy the application service. Railway uses the root `railway.toml` health check to wait for the API before marking the deployment healthy.
+1. Create a MongoDB Atlas cluster and database user. In Atlas Network Access, allow the outbound IP addresses shown for your Render service.
+2. In Render, create a new Blueprint from this GitHub repository. Render reads the root `render.yaml` and builds the app from the root `Dockerfile`.
+3. During Blueprint setup, provide the Atlas `mongodb+srv://` URI as `MONGODB_URI`, a store-owner `ADMIN_USERNAME`, and a unique `ADMIN_PASSWORD` with at least 16 characters. These are secret values; never commit them or share them in chat.
+4. Deploy the Blueprint. It configures `SESSION_COOKIE_SECURE=true` and checks `/api/dashboard/summary` for health.
 
 The store-owner console requires the configured username and password. Product browsing and customer checkout remain public; product changes, order administration, and dashboard data require an authenticated session. The app can run without a MongoDB service by falling back to in-memory storage, but that data is not persistent across restarts. Do not store production data in in-memory mode.
+
+The Render Blueprint targets the Free web-service plan for a no-cost demo. Free services can spin down after inactivity and take about a minute to wake; Render does not recommend them for production.
 
 ## Environment Variables
 
