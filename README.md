@@ -67,7 +67,7 @@ The root `Dockerfile` builds the React frontend and Spring Boot backend into one
 
 1. In Render, create a Blueprint from this GitHub repository. Render reads the root `render.yaml` and builds the app from the root `Dockerfile`.
 2. During Blueprint setup, provide a store-owner `ADMIN_USERNAME` and a unique `ADMIN_PASSWORD` with at least 16 characters. These are secret values; never commit them or share them in chat.
-3. Deploy the Blueprint. It configures in-memory storage and `SESSION_COOKIE_SECURE=true`, and checks `/api/dashboard/summary` for health.
+3. Deploy the Blueprint. It configures in-memory storage and `SESSION_COOKIE_SECURE=true`, and checks the public `/api/products` endpoint for health.
 
 The store-owner console requires the configured username and password. Product browsing and customer checkout remain public; product changes, order administration, and dashboard data require an authenticated session. In-memory products and orders reset whenever the service restarts or redeploys. This is appropriate only for a demo; do not use it for production or important customer orders.
 
